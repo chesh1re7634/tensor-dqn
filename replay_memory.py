@@ -1,5 +1,7 @@
 import numpy as np
 import random
+from config import SimpleConfig
+from environment import SimpleGymEnvironment
 
 
 class ReplayMemory:
@@ -67,10 +69,33 @@ class ReplayMemory:
         rewards     = self.rewards[indexes]
         terminals   = self.terminals[indexes]
 
-        return self.prestates, actions, rewards, self.poststates, terminals
+        return np.transpose(self.prestates, (0, 2, 3, 1)), actions, rewards, \
+               np.transpose(self.poststates,  (0, 2, 3,1)), terminals
 
+if __name__ == "__main__":
+    config = SimpleConfig()
 
+    env = SimpleGymEnvironment(config)
 
+    env.new_game(bRandom=True)
+
+    memory = ReplayMemory(config)
+
+    for _ in range(2 * config.memory_size):
+        action = random.randint(0, env.action_size)
+
+        screen, reward, terminal = env.act(action)
+
+        memory.add(screen, reward, action, reward)
+
+    data = memory.sample()
+
+    print len(data)
+    print data[0].shape
+    print data[1].shape
+    print data[2].shape
+    print data[3].shape
+    print data[4].shape
 
 
 

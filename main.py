@@ -2,8 +2,25 @@ import gym
 from ops import conv2d, linear
 import tensorflow as tf
 import numpy as np
+
+from base import BaseModel
 from config import SimpleConfig
 from environment import SimpleGymEnvironment
+from replayMemory import ReplayMemory
+from history import history
+
+class Agent(BaseModel):
+    def __init__(self, config, environment):
+        super(Agent, self).__init__(config)
+
+        # environment
+        self.env = environment
+        self.action_size = self.env.action_size
+
+        # memory & history
+        self.memory = ReplayMemory(self.config)
+        self.history = history(self.config)
+
 
 if __name__ == "__main__":
 
@@ -17,6 +34,7 @@ if __name__ == "__main__":
     action_size = env.action_size
 
     # memory
+    memory = ReplayMemory(config)
     memory_size = config.history_length
     screens = np.empty((memory_size, screen_height, screen_width, history_length), dtype=np.float16)
 

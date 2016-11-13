@@ -1,6 +1,7 @@
 import gym
 import random
 import cv2
+from config import SimpleConfig
 
 class Environment(object):
     def __init__(self, config):
@@ -53,4 +54,14 @@ class SimpleGymEnvironment(Environment):
         self._step(action)
         self.render()
         return self.state
+
+if __name__ == "__main__":
+
+    config = SimpleConfig()
+
+    env = SimpleGymEnvironment(config)
+
+    env.new_game()
+
+    print env.act(0)
 

@@ -1,16 +1,5 @@
 import ConfigParser
 
-def readConfig(path):
-    config_parser = ConfigParser.ConfigParser()
-    config_parser.read(path)
-
-    config = {}
-    for section in config_parser.sections():
-        for option in config_parser.options(section):
-            config[option] = config_parser.get(section, option)
-
-    return config
-
 class SimpleConfig:
     memory_size         = 100
     screen_height       = 210
@@ -22,8 +11,10 @@ class SimpleConfig:
 
     display             = False
 
-if __name__ == "__main__":
-    print readConfig("config.ini")
+    random_start        = 30
+
+    learn_start         = 20
+
 
 
 
