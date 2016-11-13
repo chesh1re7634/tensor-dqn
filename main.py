@@ -6,11 +6,11 @@ import numpy as np
 from base import BaseModel
 from config import SimpleConfig
 from environment import SimpleGymEnvironment
-from replayMemory import ReplayMemory
-from history import history
+from replay_memory import ReplayMemory
+from history import History
 
 class Agent(BaseModel):
-    def __init__(self, config, environment):
+    def __init__(self, config, environment, sess):
         super(Agent, self).__init__(config)
 
         # environment
@@ -19,75 +19,94 @@ class Agent(BaseModel):
 
         # memory & history
         self.memory = ReplayMemory(self.config)
-        self.history = history(self.config)
+        self.history = History(self.config)
+
+        # Session
+        self.sess = sess
+
+        self.build_dqn()
+
+    def build_dqn(self):
+        self.w = {}
+        self.t_w = {}
+
+        # build graph & ops
+        initializer = tf.truncated_normal_initializer(0, 0.02)
+        activation_fn = tf.nn.relu
+
+        with tf.variable_scope('prediction'):
+            self.s_t = tf.placeholder('float32', [None, self.screen_height, self.screen_width, self.history_length], name='s_t')
+
+            self.l1, self.w['l1_w'], self.w['l1_b'] = conv2d(self.s_t, 32, [8, 8], [4, 4], initializer, activation_fn, name='l1')
+            self.l2, self.w['l2_w'], self.w['l2_b'] = conv2d(self.l1, 64, [4, 4], [2, 2], initializer, activation_fn, name='l2')
+            self.l3, self.w['l3_w'], self.w['l3_b'] = conv2d(self.l2, 64, [3, 3], [1, 1], initializer, activation_fn, name='l3')
+
+            l3_shape = self.l3.get_shape().as_list()
+            self.l3_flat = tf.reshape(self.l3, [-1, reduce(lambda x, y: x * y, l3_shape[1:])])
+
+            self.l4, self.w['l4_w'], self.w['l4_b'] = linear(self.l3_flat, 512, activation_fn=activation_fn, name='l4')
+            self.q, self.w['q_w'], self.w['q_b'] = linear(self.l4, self.action_size, name='q')
+
+            self.q_action = tf.argmax(self.q, dimension=1)
+        '''
+        with tf.variable_scope('target'):
+            self.target_s_t = tf.placeholder('float32', \
+                [None, self.screen_height, self.screen_width, self.history_length], name='target_s_t')
+
+            self.target_l1, self.t_w['l1_w'], self.t_w['l1_b'] = \
+                conv2d(self.target_s_t, 32, [8, 8], [4, 4], initializer, activation_fn, name='t_l1')
+            self.target_l2, self.t_w['l2_w'], self.t_w['l2_b'] = \
+                conv2d(self.target_l1, 64, [4, 4], [2, 2], initializer, activation_fn, name='t_l2')
+            self.target_l3, self.t_w['l3_w'], self.t_w['l3_b'] = \
+                conv2d(self.target_l2, 64, [3, 3], [1, 1], initializer, activation_fn, name='t_l3')
+
+            l3_shape = self.target_l3.get_shape().as_list()
+            self.target_l3_flat = tf.reshape(self.target_l3, [-1, reduce(lambda x, y: x + y, l3_shape[1:])])
+
+            self.target_l4, self.t_w['l4_w'], self.t_w['l4_b'] = \
+                linear(self.target_l3_flat, 512, activation_fn=activation_fn, name='t_l4')
+            self.target_q, self.t_w['q_w'], self.t_w['q_b'] = \
+                linear(self.target_l4, self.action_size, name='t_q')
+
+            self.q_action = tf.argmax(self.target_q, dimension=1)
+        '''
+        self.sess.run(tf.initialize_all_variables())
+
+    def predict(self, s_t):
+        # todo
+
+        action = self.sess.run(self.q_action, feed_dict={self.s_t: [s_t]})
+
+        return action
+
+
+    def train(self):
+
+        screen, reward, terminal = self.env.new_game()
+
+        for _ in range(self.history_length):
+            self.history.add(screen)
+
+        predicted_action = self.predict(self.history.get())
+
+        return predicted_action
+
 
 
 if __name__ == "__main__":
-
-    config = SimpleConfig
-
-    screen_height, screen_width, history_length = config.screen_height, config.screen_widht, config.history_length
-
+    config= SimpleConfig
     env = SimpleGymEnvironment(config)
-
-    # gym constant
-    action_size = env.action_size
-
-    # memory
-    memory = ReplayMemory(config)
-    memory_size = config.history_length
-    screens = np.empty((memory_size, screen_height, screen_width, history_length), dtype=np.float16)
-
-    # simulation & memory collectiong
-    for i in range(memory_size):
-        observation, reward, terminal, info = env.step(0)
-
-        screens[i, ...] = observation
-
-    # build graph & ops
-    initializer = tf.truncated_normal_initializer(0, 0.02)
-    activation_fn = tf.nn.relu
-    w = {}
-    t_w = {}
-
-    with tf.variable_scope('prediction'):
-        x = tf.placeholder('float32', [None, screen_height, screen_width, history_length], name='state')
-
-        l1, w['l1_w'], w['l1_b'] = conv2d(x, 32, [8,8], [4,4], initializer, activation_fn, name='l1')
-        l2, w['l2_w'], w['l2_b'] = conv2d(l1, 64, [4,4], [2,2], initializer, activation_fn, name='l2')
-        l3, w['l3_w'], w['l3_b'] = conv2d(l2, 64, [3, 3], [1, 1], initializer, activation_fn, name='l3')
-
-        l3_shape = l3.get_shape().as_list()
-        l3_flat = tf.reshape(l3, [-1, reduce(lambda x, y: x*y, l3_shape[1:])])
-
-        l4, w['l4_w'], w['l4_b'] = linear(l3_flat, 512, activation_fn=activation_fn,name='l4')
-        q, w['q_w'], w['q_b'] = linear(l4, action_size, name='q')
-
-        q_action = tf.argmax(q, dimension=1)
-
-    with tf.variable_scope('target'):
-        target_x = tf.placeholder('float32', [None, screen_height, screen_width, history_length], name='target_state')
-
-        target_l1, t_w['l1_w'], t_w['l1_b'] = conv2d(target_x, 32, [8, 8], [4, 4], initializer, activation_fn, name='t_l1')
-        target_l2, t_w['l2_w'], t_w['l2_b'] = conv2d(target_l1, 64, [4, 4], [2, 2], initializer, activation_fn, name='t_l2')
-        target_l3, t_w['l3_w'], t_w['l3_b'] = conv2d(target_l2, 64, [3, 3], [1, 1], initializer, activation_fn, name='t_l3')
-
-        l3_shape = target_l3.get_shape().as_list()
-        target_l3_flat = tf.reshape(target_l3, [-1, reduce(lambda x, y: x+y, l3_shape[1:])])
-
-        target_l4, t_w['l4_w'], t_w['l4_b'] = linear(target_l3_flat, 512, activation_fn=activation_fn, name='t_l4')
-        target_q, t_w['q_w'], t_w['q_b'] = linear(target_l4, action_size, name='t_q')
-
-        q_action = tf.argmax(target_q, dimension=1)
-
     sess = tf.Session()
 
-    sess.run(tf.initialize_all_variables())
+    agent = Agent(config, env, sess)
 
-    output = sess.run(q_action,feed_dict={x:screens})
+    print agent.train()
 
-    print action_size
-    print output
+
+
+
+
+
 
 
 

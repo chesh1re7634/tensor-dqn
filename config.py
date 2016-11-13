@@ -15,6 +15,8 @@ class SimpleConfig:
 
     learn_start         = 20
 
+    train_epoch         = 300
+
 
 
 

@@ -36,7 +36,7 @@ class Environment(object):
 
     @property
     def action_size(self):
-        return not self.env.action_space
+        return self.env.action_space.n
 
     @property
     def state(self):
@@ -63,5 +63,5 @@ if __name__ == "__main__":
 
     env.new_game()
 
-    print env.act(0)
+    print env.act()
 
