@@ -2,6 +2,7 @@ import gym
 from ops import conv2d, linear
 import tensorflow as tf
 import numpy as np
+import random
 
 from base import BaseModel
 from config import SimpleConfig
@@ -68,28 +69,51 @@ class Agent(BaseModel):
             self.target_q, self.t_w['q_w'], self.t_w['q_b'] = \
                 linear(self.target_l4, self.action_size, name='t_q')
 
+        with tf.variable_scope('optimizer'):
+            self.target_q_t = tf.placeholder('float32', [None], name='target_q_t')
+            self.action = tf.placeholder('int64', [None], name='action')
+
+            action_one_hot = tf.one_hot(self.action, self.action_size, 1.0, 0.0, name='action_one_hot')
+            q_acted = tf.reduce_sum(self.q * action_one_hot, reduction_indices=1, name='q_acted')
+
+            delta = self.target_q_t - q_acted
+
         self.sess.run(tf.initialize_all_variables())
 
     def predict(self, s_t):
         # todo
 
-        action = self.sess.run(self.target_q, feed_dict={self.target_s_t: [s_t]})
+        action = self.sess.run(self.q_action, feed_dict={self.s_t: [s_t]})
 
         return action
+
+    def observe(self, screen, reward, action, terminal):
+
+        self.history.add(screen)
+        self.memory.add(screen, reward, action, terminal)
+
+        if self.step > self.learn_start:
+            s_t, action, reward, s_t_plus1, terminal = self.memory.sample()
+
+            q_acted = self.sess.run(self.q, feed_dict={
+                self.action: action,
+                self.s_t: s_t
+            })
+
+            print q_acted.shape
 
 
     def train(self):
 
         screen, reward, terminal = self.env.new_game()
 
-        for _ in range(self.history_length):
-            self.history.add(screen)
+        for self.step in range(100):
 
-        predicted_action = self.predict(self.history.get())
+            action = random.randint(0, self.action_size-1)
 
-        return predicted_action
+            screen, reward, terminal = self.env.act(action)
 
-
+            self.observe(screen, reward, action, terminal)
 
 if __name__ == "__main__":
     config= SimpleConfig

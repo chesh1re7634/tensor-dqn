@@ -51,6 +51,7 @@ class SimpleGymEnvironment(Environment):
         super(SimpleGymEnvironment, self).__init__(config)
 
     def act(self, action):
+        assert 0 <= action < self.action_size, 'invalid action %d; action_size %d' % (action, self.action_size)
         self._step(action)
         self.render()
         return self.state
