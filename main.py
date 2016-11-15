@@ -48,7 +48,7 @@ class Agent(BaseModel):
             self.q, self.w['q_w'], self.w['q_b'] = linear(self.l4, self.action_size, name='q')
 
             self.q_action = tf.argmax(self.q, dimension=1)
-        '''
+
         with tf.variable_scope('target'):
             self.target_s_t = tf.placeholder('float32', \
                 [None, self.screen_height, self.screen_width, self.history_length], name='target_s_t')
@@ -60,22 +60,20 @@ class Agent(BaseModel):
             self.target_l3, self.t_w['l3_w'], self.t_w['l3_b'] = \
                 conv2d(self.target_l2, 64, [3, 3], [1, 1], initializer, activation_fn, name='t_l3')
 
-            l3_shape = self.target_l3.get_shape().as_list()
-            self.target_l3_flat = tf.reshape(self.target_l3, [-1, reduce(lambda x, y: x + y, l3_shape[1:])])
+            target_l3_shape = self.target_l3.get_shape().as_list()
+            self.target_l3_flat = tf.reshape(self.target_l3, [-1, reduce(lambda x, y: x * y, target_l3_shape[1:])])
 
             self.target_l4, self.t_w['l4_w'], self.t_w['l4_b'] = \
                 linear(self.target_l3_flat, 512, activation_fn=activation_fn, name='t_l4')
             self.target_q, self.t_w['q_w'], self.t_w['q_b'] = \
                 linear(self.target_l4, self.action_size, name='t_q')
 
-            self.q_action = tf.argmax(self.target_q, dimension=1)
-        '''
         self.sess.run(tf.initialize_all_variables())
 
     def predict(self, s_t):
         # todo
 
-        action = self.sess.run(self.q_action, feed_dict={self.s_t: [s_t]})
+        action = self.sess.run(self.target_q, feed_dict={self.target_s_t: [s_t]})
 
         return action
 
