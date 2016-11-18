@@ -76,7 +76,11 @@ class Agent(BaseModel):
             action_one_hot = tf.one_hot(self.action, self.action_size, 1.0, 0.0, name='action_one_hot')
             q_acted = tf.reduce_sum(self.q * action_one_hot, reduction_indices=1, name='q_acted')
 
-            delta = self.target_q_t - q_acted
+            self.delta = self.target_q_t - q_acted
+            clipped_delta = tf.clip_by_value(self.delta, self.min_delta, self.max_delta, name='clipped_delta')
+
+            self.loss = tf.reduce_mean(tf.square(clipped_delta), name='loss')
+            self.optm = tf.train.AdamOptimizer(1e-4).minimize(self.loss)
 
         self.sess.run(tf.initialize_all_variables())
 
@@ -93,14 +97,24 @@ class Agent(BaseModel):
         self.memory.add(screen, reward, action, terminal)
 
         if self.step > self.learn_start:
-            s_t, action, reward, s_t_plus1, terminal = self.memory.sample()
+            self.q_learning()
 
-            q_acted = self.sess.run(self.q, feed_dict={
-                self.action: action,
-                self.s_t: s_t
-            })
+    def q_learning(self):
+        if self.memory.total_count < self.history_length:
+            return
 
-            print q_acted.shape
+        s_t, action, reward, s_t_plus1, terminal = self.memory.sample()
+
+        t_q_plus_1 = self.sess.run(self.target_q, feed_dict={self.target_s_t: s_t})
+
+        terminal = terminal + 0.
+        max_q_t_plus_1 = np.max(t_q_plus_1, axis=1)
+        target_q_t = (1. - terminal) * self.discount * max_q_t_plus_1 + reward
+
+
+
+        print target_q_t
+
 
 
     def train(self):

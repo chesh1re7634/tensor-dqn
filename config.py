@@ -17,6 +17,11 @@ class SimpleConfig:
 
     train_epoch         = 300
 
+    discount            = 0.99
+
+    min_delta           = -1
+    max_delta           = 1
+
 
 
 
