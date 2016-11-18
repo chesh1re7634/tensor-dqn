@@ -82,6 +82,14 @@ class Agent(BaseModel):
             self.loss = tf.reduce_mean(tf.square(clipped_delta), name='loss')
             self.optm = tf.train.AdamOptimizer(1e-4).minimize(self.loss)
 
+        with tf.variable_scope("update_target"):
+            self.t_w_input = {}
+            self.t_w_assign_op = {}
+
+            for name in self.w.keys():
+                self.t_w_input[name] = tf.placeholder('float32', self.t_w[name].get_shape().as_list(), name=name)
+                self.t_w_assign_op[name] = self.t_w[name].assign(self.t_w_input[name])
+
         self.sess.run(tf.initialize_all_variables())
 
     def predict(self, s_t):
@@ -97,7 +105,11 @@ class Agent(BaseModel):
         self.memory.add(screen, reward, action, terminal)
 
         if self.step > self.learn_start:
-            self.q_learning()
+            if self.step % self.train_frequency == self.train_frequency - 1:
+                self.q_learning()
+
+            if self.step % self.target_q_update_step == self.target_q_update_step - 1:
+                self.update_target_q_network()
 
     def q_learning(self):
         if self.memory.total_count < self.history_length:
@@ -111,23 +123,44 @@ class Agent(BaseModel):
         max_q_t_plus_1 = np.max(t_q_plus_1, axis=1)
         target_q_t = (1. - terminal) * self.discount * max_q_t_plus_1 + reward
 
+        _, q_t, loss = self.sess.run([self.optm, self.q, self.loss], feed_dict={
+            self.target_q_t : target_q_t,
+            self.action : action,
+            self.s_t : s_t
+        })
+        #print loss
+        return loss
 
-
-        print target_q_t
-
-
+    def update_target_q_network(self):
+        for name in self.w.keys():
+            self.t_w_assign_op[name].eval({self.t_w_input[name] : self.w[name].eval(session=self.sess)}, session=self.sess)
 
     def train(self):
 
-        screen, reward, terminal = self.env.new_game()
+        screen, reward, terminal = self.env.new_game(bRandom=True)
 
-        for self.step in range(100):
+        for _ in range(self.history_length):
+            self.history.add(screen)
 
-            action = random.randint(0, self.action_size-1)
+        ep_rewards = []
+        for self.step in range(self.train_epoch):
+
+            action = self.predict(self.history.get())
 
             screen, reward, terminal = self.env.act(action)
 
             self.observe(screen, reward, action, terminal)
+
+            ep_rewards.append(reward)
+
+            if terminal:
+                screen, reward, terminal = self.env.new_game(bRandom=True)
+
+                print np.mean(ep_rewards)
+
+                ep_rewards = []
+
+
 
 if __name__ == "__main__":
     config= SimpleConfig
@@ -136,7 +169,7 @@ if __name__ == "__main__":
 
     agent = Agent(config, env, sess)
 
-    print agent.train()
+    agent.train()
 
 
 
