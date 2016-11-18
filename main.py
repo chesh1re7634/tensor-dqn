@@ -93,9 +93,10 @@ class Agent(BaseModel):
         self.sess.run(tf.initialize_all_variables())
 
     def predict(self, s_t):
-        # todo
-
-        action = self.sess.run(self.q_action, feed_dict={self.s_t: [s_t]})
+        if random.random() <  self.epsilon:
+            action = random.randrange(self.env.action_size)
+        else:
+            action = self.sess.run(self.q_action, feed_dict={self.s_t: [s_t]})
 
         return action
 
@@ -156,6 +157,7 @@ class Agent(BaseModel):
             if terminal:
                 screen, reward, terminal = self.env.new_game(bRandom=True)
 
+                #print "%d step " % self.step
                 print np.mean(ep_rewards)
 
                 ep_rewards = []
