@@ -26,9 +26,11 @@ class SimpleConfig:
 
     scale = 1000
 
-    target_q_update_step    = 1 * scale
+    target_q_update_step    = 100
     train_epoch             = 50000 * scale
     memory_size             = 20 * scale
+
+    test_frequency = 10
 
     epsilon = 0.05
 

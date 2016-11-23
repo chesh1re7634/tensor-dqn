@@ -10,6 +10,8 @@ from environment import SimpleGymEnvironment
 from replay_memory import ReplayMemory
 from history import History
 
+from utils import tmpLogDir
+
 class Agent(BaseModel):
     def __init__(self, config, environment, sess):
         super(Agent, self).__init__(config)
@@ -90,7 +92,21 @@ class Agent(BaseModel):
                 self.t_w_input[name] = tf.placeholder('float32', self.t_w[name].get_shape().as_list(), name=name)
                 self.t_w_assign_op[name] = self.t_w[name].assign(self.t_w_input[name])
 
+        with tf.variable_scope('summary'):
+            scalar_summary_tags = ['episode_max_reward', 'episode_min_reward', 'episode_avg_reward', \
+                                   'average_reward', 'average_loss', 'average_q']
+
+            self.summary_placeholders = {}
+            self.summary_ops = {}
+
+            for tag in scalar_summary_tags:
+                self.summary_placeholders[tag] = tf.placeholder('float32', None, name=tag)
+                self.summary_ops[tag] = tf.scalar_summary("%s/%s" % (self.env_name, tag), self.summary_placeholders[tag])
+
+            self.writer = tf.train.SummaryWriter(tmpLogDir(), self.sess.graph)
+
         self.sess.run(tf.initialize_all_variables())
+        self.update_target_q_network()
 
     def predict(self, s_t):
         if random.random() <  self.epsilon:
@@ -129,22 +145,30 @@ class Agent(BaseModel):
             self.action : action,
             self.s_t : s_t
         })
-        #print loss
-        return loss
+
+        self.total_loss += loss
+        self.total_q += q_t.mean()
+        self.update_count += 1
 
     def update_target_q_network(self):
         for name in self.w.keys():
             self.t_w_assign_op[name].eval({self.t_w_input[name] : self.w[name].eval(session=self.sess)}, session=self.sess)
 
     def train(self):
+        num_game, ep_reward = 0, 0.
+        total_reward, self.total_loss, self.total_q = 0., 0., 0.
+        ep_rewards = []
 
         screen, reward, terminal = self.env.new_game(bRandom=True)
 
         for _ in range(self.history_length):
             self.history.add(screen)
 
-        ep_rewards = []
         for self.step in range(self.train_epoch):
+            if self.step == self.learn_start:
+                num_game, ep_reward = 0, 0.
+                total_reward, self.total_loss, self.total_q = 0., 0., 0.
+                ep_rewards = []
 
             action = self.predict(self.history.get())
 
@@ -152,17 +176,57 @@ class Agent(BaseModel):
 
             self.observe(screen, reward, action, terminal)
 
-            ep_rewards.append(reward)
-
             if terminal:
                 screen, reward, terminal = self.env.new_game(bRandom=True)
 
-                #print "%d step " % self.step
-                print np.mean(ep_rewards)
+                num_game += 1
+                ep_rewards.append(ep_reward)
+                ep_reward = 0.
+            else:
+                ep_reward += reward
 
+            total_reward += reward
+
+            if self.step >= self.learn_start and \
+                self.step % self.test_frequency == self.test_frequency - 1:
+
+                avg_reward = total_reward / self.test_frequency
+                avg_loss = self.total_loss / self.update_count
+                avg_q = self.total_q / self.update_count
+
+                try:
+                    max_ep_reward = np.max(ep_rewards)
+                    min_ep_reward = np.min(ep_rewards)
+                    avg_ep_reward = np.mean(ep_rewards)
+                except:
+                    max_ep_reward, min_ep_reward, avg_ep_reward = 0, 0, 0
+
+                print "ep_max_reward %.4f, ep_min_reward %.4f, ep_avg_reward %.4f, avg_reward, avg_loss, avg_q " % \
+                      (max_ep_reward, min_ep_reward, avg_ep_reward, avg_reward, avg_loss, avg_q)
+
+                self.inject_summary({
+                    'episode_max_reward' : max_ep_reward,
+                    'episode_min_reward' : min_ep_reward,
+                    'episode_avg_reward' : avg_ep_reward,
+                    'average_reward' : avg_reward,
+                    'average_loss' : avg_loss,
+                    'average_q' : avg_q
+                }, self.step)
+
+                num_game = 0
+                total_reward = 0.
+                self.total_loss = 0.
+                self.total_q = 0.
+                self.update_count = 0
                 ep_rewards = []
 
+    def inject_summary(self, tag_dict, step):
+        summary_lists = self.sess.run([self.summary_ops[tag] for tag in self.tag_dict.keys()], \
+            {self.summary_placeholders[tag]: value for tag, value in tag_dict.items()
+        })
 
+        for summary_str in summary_lists:
+            self.wrtier.add_summary(summary_str, step)
 
 if __name__ == "__main__":
     config= SimpleConfig
