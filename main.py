@@ -155,7 +155,7 @@ class Agent(BaseModel):
             self.t_w_assign_op[name].eval({self.t_w_input[name] : self.w[name].eval(session=self.sess)}, session=self.sess)
 
     def train(self):
-        num_game, ep_reward = 0, 0.
+        num_game, update_count, ep_reward = 0, 0, 0.
         total_reward, self.total_loss, self.total_q = 0., 0., 0.
         ep_rewards = []
 
@@ -166,7 +166,7 @@ class Agent(BaseModel):
 
         for self.step in range(self.train_epoch):
             if self.step == self.learn_start:
-                num_game, ep_reward = 0, 0.
+                num_game, self.update_count, ep_reward = 0, 0, 0.
                 total_reward, self.total_loss, self.total_q = 0., 0., 0.
                 ep_rewards = []
 
@@ -201,7 +201,7 @@ class Agent(BaseModel):
                 except:
                     max_ep_reward, min_ep_reward, avg_ep_reward = 0, 0, 0
 
-                print "ep_max_reward %.4f, ep_min_reward %.4f, ep_avg_reward %.4f, avg_reward, avg_loss, avg_q " % \
+                print "ep_max_reward %.4f, ep_min_reward %.4f, ep_avg_reward %.4f, avg_reward %.4f, avg_loss %.4f, avg_q %.4f " % \
                       (max_ep_reward, min_ep_reward, avg_ep_reward, avg_reward, avg_loss, avg_q)
 
                 self.inject_summary({
@@ -221,12 +221,12 @@ class Agent(BaseModel):
                 ep_rewards = []
 
     def inject_summary(self, tag_dict, step):
-        summary_lists = self.sess.run([self.summary_ops[tag] for tag in self.tag_dict.keys()], \
+        summary_lists = self.sess.run([self.summary_ops[tag] for tag in tag_dict.keys()], \
             {self.summary_placeholders[tag]: value for tag, value in tag_dict.items()
         })
 
         for summary_str in summary_lists:
-            self.wrtier.add_summary(summary_str, step)
+            self.writer.add_summary(summary_str, step)
 
 if __name__ == "__main__":
     config= SimpleConfig
